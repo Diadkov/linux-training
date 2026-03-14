@@ -35,7 +35,7 @@ argument:
 List the sizes of the files f1 and f2 using ls –l and explain the difference.
 */
 
-void writeBytes(int fd, int numOfBytes, int useSeek)
+void writeBytes(int fd, long numOfBytes, int useSeek)
 {
     const char letter = 'A';
 
@@ -50,36 +50,29 @@ void writeBytes(int fd, int numOfBytes, int useSeek)
 }
 
 int main(int argc, char *argv[])
-{
-    // atomic_append filename num-bytes [x]
-    
+{   
     int numsWithdefaultParams = 3, numsWithAdditionalParams = 4;
 
     if(argc != numsWithdefaultParams && argc != numsWithAdditionalParams)
         errExit("Error num of params");
 
-    const char* command = "atomic_append"; // filename - argv[1]
-
-    if(strcmp(argv[1], command) != 0)
-        errExit("Parameter arg [%s] not equal to actual  [%s]", argv[1], command);
-    
-    int numOfBytes;
-    char* end;
-    int base = 10;
-    numOfBytes = strtol(argv[2], &end, base);
-
-    if(numOfBytes < 0)
-        errExit("negative number of bits");
-
     mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     int flags = O_WRONLY  | O_CREAT;
 
-    const char* filename = "file.txt";
+    const char* filename = argv[1];
     int fd = open(filename, flags, perms);
     if(fd == -1)
         errExit("open");
     
-    if(numsWithdefaultParams == argc)
+    long numOfBytes;
+    char* end;
+    int base = 10;
+    numOfBytes = strtol(argv[2], &end, base);
+
+    if(numOfBytes < 0 || *end != '\0')
+        errExit("negative number of bits or end error");
+
+    if(numsWithdefaultParams == argc) // practice for changine flags
     {
         int allFlags = fcntl(fd, F_GETFL);   
         if (allFlags == -1)
@@ -94,7 +87,11 @@ int main(int argc, char *argv[])
     int withAppend = 0, withoutAppend = 1;
     int useSeek = withoutAppend;
 
-    if((fcntl(fd, F_GETFL) & O_APPEND) != 0) // if value is set
+    int flagsNow = fcntl(fd, F_GETFL);
+    if (flagsNow == -1)
+        errExit("fcntl");
+
+    if(flagsNow & O_APPEND)
         useSeek = withAppend;
 
     writeBytes(fd, numOfBytes, useSeek);
