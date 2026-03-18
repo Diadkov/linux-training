@@ -17,30 +17,6 @@
     them all (which is what the glibc version of unsetenv() does).
 */
 
-// setenv
-// unsetenv
-
-//getenv(), putenv()
-
-/*
-char *getenv(const char *name);
-
-Returns pointer to (value) string, or NULL if no such variable
-*/
-
-
-// extern char **environ;
-// int main(int argc, char *argv[])
-// {
-//     char **ep;
-//     for (ep = environ; *ep != NULL; ep++)
-//     puts(*ep);
-//     exit(EXIT_SUCCESS);
-// }
-
-
-
-
 int ft_setenv(const char *name, const char *value, int overwrite)
 {
     if(getenv(name) != NULL && overwrite == 0)
