@@ -27,88 +27,101 @@
                char   *pw_dir;        home directory 
                char   *pw_shell;      shell program 
            };
-
-    nobody:*:-2:-2:Unprivileged User:/var/empty:/usr/bin/false
-    mtk:x:1000:100:Michael Kerrisk:/home/mtk:/bin/bash
-    log name : passwd : userid : groupid : comment : home dir : login shell
-    
-    root:x:0:0:root:/root:/bin/bash
-    open file
-    ...
 */
-void readLines(int fd, const char* name, void (*processLine)(const char *, const char *))
-{
-    char buffer[1024];
-    char line[2048];
-    int lineLen = 0;
-    ssize_t bytesRead;
 
-    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
+#include <pwd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+void free_passwd(struct passwd *p)
+{
+    if (!p) return;
+
+    free(p->pw_name);
+    free(p->pw_passwd);
+    free(p->pw_gecos);
+    free(p->pw_dir);
+    free(p->pw_shell);
+    free(p);
+}
+
+static char *safe_strdup(const char *src)
+{
+    if (!src) return NULL;
+
+    char *copy = strdup(src);
+    if (!copy)
+        return NULL;
+
+    return copy;
+}
+
+static struct passwd *copy_passwd(struct passwd *src)
+{
+    struct passwd *dst = malloc(sizeof(struct passwd));
+    if (!dst)
+        return NULL;
+
+    dst->pw_uid = src->pw_uid;
+    dst->pw_gid = src->pw_gid;
+
+    dst->pw_name   = safe_strdup(src->pw_name);
+    dst->pw_passwd = safe_strdup(src->pw_passwd);
+    dst->pw_gecos  = safe_strdup(src->pw_gecos);
+    dst->pw_dir    = safe_strdup(src->pw_dir);
+    dst->pw_shell  = safe_strdup(src->pw_shell);
+
+    if (!dst->pw_name || !dst->pw_passwd || !dst->pw_gecos ||
+        !dst->pw_dir  || !dst->pw_shell)
     {
-        for (ssize_t i = 0; i < bytesRead; ++i)
+        free_passwd(dst);
+        return NULL;
+    }
+
+    return dst;
+}
+
+struct passwd *ft_getpwnam(const char *name)
+{
+    struct passwd *entry;
+
+    if (!name)
+        return NULL;
+
+    setpwent();
+
+    while ((entry = getpwent()) != NULL)
+    {
+        if (strcmp(entry->pw_name, name) == 0)
         {
-            if (buffer[i] == '\n')
-            {
-                line[lineLen] = '\0';
-                processLine(line, name);
-                lineLen = 0;
-            }
-            else
-            {
-                if (lineLen < (int)sizeof(line) - 1)
-                {
-                    line[lineLen++] = buffer[i];
-                }
-                else
-                {
-                    errExit("Line too long");
-                }
-            }
+            struct passwd *result = copy_passwd(entry);
+            endpwent();
+            return result;
         }
     }
 
-    if (bytesRead == -1)
-        errExit("read");
-
-    if (lineLen > 0)
-    {
-        line[lineLen] = '\0';
-        processLine(line, name);
-    }
-}
-
-void processLine(const char *line, const char* name)
-{
-    if (strncmp(line, name, strlen(name)) == 0)
-    {
-        printf("%s\n", line);
-    }
-}
-
-struct passwd *ft_getpwnam(const char* name)
-{
-    const char* filename = "/etc/passwd";
-    int readFlags = O_RDONLY;
-    mode_t modes = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP |S_IROTH | S_IWOTH;
-    
-    int fd = open(filename, readFlags, modes);
-    if(fd == -1)
-        errExit("open");
-
-    readLines(fd, name, processLine);
-    
-    
-    // read line
-    if(close(fd) == -1)
-        errExit("close");
-
+    endpwent();
     return NULL;
-    // close file
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
-    ft_getpwnam("root");
-    
-    return 0 ;
+    struct passwd *p = ft_getpwnam("root");
+
+    if (p)
+    {
+        printf("User: %s\n", p->pw_name);
+        printf("UID: %d\n", p->pw_uid);
+        printf("Home: %s\n", p->pw_dir);
+        printf("Shell: %s\n", p->pw_shell);
+
+        free_passwd(p);
+    }
+    else
+    {
+        printf("User not found\n");
+    }
+
+    return 0;
 }

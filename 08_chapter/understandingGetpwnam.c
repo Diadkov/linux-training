@@ -27,5 +27,5 @@ int main(int argc, char *argv[])
 
     printf("%ld %ld\n", (long)a->pw_uid, (long)b->pw_uid);
     
-    return 0 ;
+    return 0;
 }
