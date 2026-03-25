@@ -63,6 +63,7 @@ void cmdLineErr(const char *format, ...);
 #include <string.h>
 #include <limits.h>
 #include <errno.h>
+#include <unistd.h>
 /* Print a diagnostic message that contains a function name ('fname'),
    the value of a command-line argument ('arg'), the name of that
    command-line argument ('name'), and a diagnostic error message ('msg'). */
