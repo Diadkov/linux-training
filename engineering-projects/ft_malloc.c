@@ -1,0 +1,193 @@
+#define _GNU_SOURCE
+#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include "../common/errorFunctions.h"
+
+/*
+    TODO:
+
+    1. Replace sizeof(Block) with BLOCK_SIZE in all coalescing logic
+
+    2. Rewrite backward coalescing to be clearer (avoid metadata reassignment)
+
+    3. Introduce MIN_PAYLOAD constant instead of ALIGN8(1) in split condition
+
+    4. Add comments explaining split condition logic
+
+    5. Optionally implement heap shrink (brk) when freeing last block
+
+    6. Handle double free with warning/debug message
+
+    7. Clean up and unify style for better readability
+*/
+
+# define ALIGN8(x) (((x) + 7) & ~7)
+#define BLOCK_SIZE ALIGN8(sizeof(Block))
+
+typedef struct Block
+{
+    size_t size;
+    int free;
+    struct Block* next;
+    struct Block* prev;
+}Block;
+
+Block* head = NULL;
+
+void *ft_malloc(size_t size)
+{
+    if(size == 0)
+        return NULL;
+    size = ALIGN8(size);
+
+    if(head == NULL)
+    {
+        head = sbrk(BLOCK_SIZE + size);
+        if(head == (void*)-1)
+            return NULL;
+
+        head->size = size;  
+        head->free = 0;
+        head->next = NULL;
+        head->prev = NULL;
+        
+        return (void*)(head + 1);
+    }
+    // first fit
+    Block* current = head;
+    Block* prev = NULL;
+    while(current)
+    {
+        if(current->free && current->size >= size)
+        {
+            if(current->size >= size + ALIGN8(1) + BLOCK_SIZE) // don't understand condition
+            {
+                char* raw = (char*)(current + 1);
+                Block* newBlock = (Block*)(raw + ALIGN8(size));; // why char? 
+                newBlock->size = current->size - size - BLOCK_SIZE;
+                newBlock->free = 1;
+                
+                newBlock->next = current->next;
+                newBlock->prev = current;
+
+                if(current->next)
+                    current->next->prev = newBlock; // what
+                
+                current->next = newBlock;
+                current->size = size;
+            }
+            current->free = 0;
+            return (void*)(current + 1);// next block 
+        }
+        prev = current;
+        current = current->next;
+    }
+    
+    Block* newBlock =  sbrk(BLOCK_SIZE + size);
+    if(newBlock == (void*)-1)
+        return NULL;
+
+    newBlock->size = size;  
+    newBlock->free = 0;
+    newBlock->next = NULL;
+    // link new block
+    prev->next = newBlock;
+    newBlock->prev = prev;
+
+    return (void*)(newBlock + 1); // get data - not metadata 
+}
+
+void ft_free(void* ptr)
+{
+    if(!ptr)
+        return;
+
+    Block* metadata = (Block*)ptr - 1;
+    if(metadata->free) // save from double free
+        return;
+    metadata->free = 1;
+    if(metadata->next && metadata->next->free) // forward merge
+    {
+        metadata->size += sizeof(Block) + metadata->next->size;
+        metadata->next = metadata->next->next;
+
+        if(metadata->next)
+            metadata->next->prev = metadata;
+    }
+    if(metadata->prev && metadata->prev->free) // backward merge
+    {
+        metadata = metadata->prev;
+
+        if(metadata->next)
+        {
+            metadata->size += sizeof(Block) + metadata->next->size;
+            metadata->next = metadata->next->next;
+
+            if(metadata->next)
+                metadata->next->prev = metadata;
+        }
+    }
+}
+// add coelesce
+// split
+
+#include <stdio.h>
+
+void print_block_info(void* ptr, const char* name)
+{
+    if (!ptr)
+    {
+        printf("%s = NULL\n", name);
+        return;
+    }
+
+    Block* b = (Block*)ptr - 1;
+    printf("%s -> addr: %p | size: %zu | free: %d\n",
+           name, ptr, b->size, b->free);
+}
+
+int main()
+{
+    printf("===== TEST START =====\n\n");
+
+    // 🔹 1. Basic alloc
+    void* p1 = ft_malloc(100);
+    void* p2 = ft_malloc(100);
+    void* p3 = ft_malloc(100);
+
+    print_block_info(p1, "p1");
+    print_block_info(p2, "p2");
+    print_block_info(p3, "p3");
+
+    printf("\n--- Free middle (p2) ---\n");
+    ft_free(p2);
+
+    print_block_info(p2, "p2");
+
+    printf("\n--- Allocate smaller (should reuse p2 + split) ---\n");
+    void* p4 = ft_malloc(50);
+
+    print_block_info(p4, "p4");
+
+    printf("\n--- Free all ---\n");
+    ft_free(p1);
+    ft_free(p3);
+    ft_free(p4);
+
+    printf("All freed.\n");
+
+    printf("\n--- Allocate big block (should reuse coalesced memory) ---\n");
+    void* p5 = ft_malloc(250);
+
+    print_block_info(p5, "p5");
+
+    printf("\n===== TEST END =====\n");
+
+    return 0;
+}
