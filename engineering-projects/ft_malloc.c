@@ -1,44 +1,5 @@
 #define _GNU_SOURCE
-#include <sys/types.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#include "../common/errorFunctions.h"
-
-/*
-    TODO:
-
-    1. Replace sizeof(Block) with BLOCK_SIZE in all coalescing logic
-
-    2. Rewrite backward coalescing to be clearer (avoid metadata reassignment)
-
-    3. Introduce MIN_PAYLOAD constant instead of ALIGN8(1) in split condition
-
-    4. Add comments explaining split condition logic
-
-    5. Optionally implement heap shrink (brk) when freeing last block
-
-    6. Handle double free with warning/debug message
-
-    7. Clean up and unify style for better readability
-*/
-
-# define ALIGN8(x) (((x) + 7) & ~7)
-#define BLOCK_SIZE ALIGN8(sizeof(Block))
-
-typedef struct Block
-{
-    size_t size;
-    int free;
-    struct Block* next;
-    struct Block* prev;
-}Block;
-
-Block* head = NULL;
+#include "ft_malloc.h"
 
 void *ft_malloc(size_t size)
 {
@@ -109,35 +70,35 @@ void ft_free(void* ptr)
         return;
 
     Block* metadata = (Block*)ptr - 1;
-    if(metadata->free) // save from double free
+    if(metadata->free) // save from double free 
+    {
+        printf("Error. Double free detected");
         return;
+    }
+        
     metadata->free = 1;
+
     if(metadata->next && metadata->next->free) // forward merge
     {
-        metadata->size += sizeof(Block) + metadata->next->size;
-        metadata->next = metadata->next->next;
+        Block* next = metadata->next;
+        
+        metadata->size += BLOCK_SIZE + next->size;
+        metadata->next = next->next;
 
-        if(metadata->next)
+        if (metadata->next)
             metadata->next->prev = metadata;
     }
     if(metadata->prev && metadata->prev->free) // backward merge
     {
-        metadata = metadata->prev;
+        Block* prev = metadata->prev;
 
-        if(metadata->next)
-        {
-            metadata->size += sizeof(Block) + metadata->next->size;
-            metadata->next = metadata->next->next;
+        prev->size += BLOCK_SIZE + metadata->size;
+        prev->next = metadata->next;
 
-            if(metadata->next)
-                metadata->next->prev = metadata;
-        }
+        if (metadata->next)
+            metadata->next->prev = prev;
     }
 }
-// add coelesce
-// split
-
-#include <stdio.h>
 
 void print_block_info(void* ptr, const char* name)
 {
